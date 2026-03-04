@@ -345,8 +345,73 @@ function handleTap(){
 
 function flash(){const f=document.getElementById('flash');f.classList.add('on');setTimeout(()=>f.classList.remove('on'),180);}
 
+/* ── Web Audio: キラキラ魔法チャイム ── */
+let audioCtx = null;
+function getCtx(){
+  if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+  return audioCtx;
+}
+
+// 単音: 周波数・開始時刻・長さ・音量
+function playTone(freq, startAt, dur, vol, ctx){
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  const pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+  osc.connect(gain);
+  if(pan){ gain.connect(pan); pan.connect(ctx.destination); } else { gain.connect(ctx.destination); }
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(freq, startAt);
+  osc.frequency.exponentialRampToValueAtTime(freq * 0.98, startAt + dur);
+  gain.gain.setValueAtTime(0, startAt);
+  gain.gain.linearRampToValueAtTime(vol, startAt + 0.012);
+  gain.gain.exponentialRampToValueAtTime(0.001, startAt + dur);
+  osc.start(startAt);
+  osc.stop(startAt + dur + 0.05);
+}
+
+// スタート音: 上昇する魔法ベル ✨
+function playStartSound(){
+  const ctx = getCtx();
+  const now = ctx.currentTime;
+  // キラキラ上昇アルペジオ (C5→E5→G5→C6)
+  const notes = [523.25, 659.25, 783.99, 1046.50, 1318.51];
+  notes.forEach((f, i) => {
+    playTone(f, now + i * 0.09, 0.55, 0.22, ctx);
+    // 倍音で輝き感
+    playTone(f * 2, now + i * 0.09, 0.3, 0.07, ctx);
+  });
+  // 最後にきらめくトレモロ
+  [1046.50, 1318.51, 1567.98].forEach((f, i) => {
+    playTone(f, now + 0.52 + i * 0.07, 0.4, 0.13, ctx);
+  });
+}
+
+// 完了音: 華やかな魔法チャイム 🌟
+function playFinishSound(){
+  const ctx = getCtx();
+  const now = ctx.currentTime;
+  // ファンファーレ的な和音 → 余韻のチャイム
+  const chord1 = [523.25, 659.25, 783.99, 1046.50];
+  chord1.forEach(f => {
+    playTone(f, now, 0.8, 0.18, ctx);
+    playTone(f * 2, now + 0.05, 0.5, 0.06, ctx);
+  });
+  // 2拍目: 上昇して輝く
+  const chord2 = [659.25, 830.61, 1046.50, 1318.51];
+  chord2.forEach((f, i) => {
+    playTone(f, now + 0.6 + i * 0.06, 1.2, 0.16, ctx);
+  });
+  // キラキラ余韻
+  [2093, 2637, 3136].forEach((f, i) => {
+    playTone(f, now + 1.1 + i * 0.1, 0.8, 0.06, ctx);
+  });
+  // 最後の一音
+  playTone(1046.50, now + 1.6, 1.5, 0.14, ctx);
+}
+
 function startTimer(){
   state='running'; totalSeconds=minutes*60; secondsLeft=totalSeconds; flash();
+  playStartSound();
   document.getElementById('pauseHint').classList.add('show');
   starBtn.classList.add('fast');
   tick(); ticker=setInterval(tick,1000); updateDisplay();
@@ -380,6 +445,7 @@ function finishTimer(){
   clearInterval(ticker); state='finished';
   document.getElementById('pauseHint').classList.remove('show');
   starBtn.classList.remove('fast');
+  playFinishSound();
   magicPower=Math.min(60,magicPower+totalSeconds/60);
   const g=document.getElementById('gauge');
   g.style.width=(magicPower/60*100)+'%';
